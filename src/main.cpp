@@ -15,9 +15,9 @@
  * 
  * Issues:
  * - Remap I2C pins, as default I2C GPIO's are used by camera.
- * - Use different interrupt creation commands (in setup).
- * - Change "" struct name in Adafruit libraries, as struct with same name also exists in esp camera lib.
- * - Sequence of library inludes (camera before Arduino) helps to point to Arduino libs to fix duplicate struct name. 
+ * - Use correct interrupt creation commands in setup().
+ * - Change "sensor_t" struct name in Adafruit libraries, as struct with same name also exists in esp camera lib.
+ * - Sequence in which libraries are inluded (esp_camera before Adafruit) helps to point to Adafruit libs to fix duplicate struct name. 
  * - Sequence of initialization in setup() seems important.
  *
 ***********************************************************************************/
@@ -73,9 +73,9 @@ void GetLuxReading() {
   sensors_event_t event;
 
   sensorLux.getEvent(&event);
-  if (event.light) {
+  if (event.light >= 0) {
     int valueLux =  event.light;
-    Serial.print (" - Illuminence: "); Serial.println( valueLux);
+    Serial.print (" - Luminosity: "); Serial.println( valueLux);
   }
   else {
     // If event.light = 0 lux the sensor is probably saturated and no reliable data could be generated! 
@@ -113,7 +113,7 @@ static void IRAM_ATTR isrSwitchChange (void *arg) {
     lastSwitchChange = millis();                  // Keep FIRST change as debounce time reference
   }
   //lastSwitchChange = millis();                  // Keep LAST change as debounce time reference
-  portEXIT_CRITICAL(&switchMux); 
+  portEXIT_CRITICAL_ISR(&switchMux); 
 }
 
 /**************************************************************************
@@ -122,16 +122,16 @@ static void IRAM_ATTR isrSwitchChange (void *arg) {
  **************************************************************************/
 static void IRAM_ATTR isrDetectMovement(void *arg) {
   //Serial.println("MOTION DETECTED!!!");
-  portENTER_CRITICAL_ISR(&pirMux);
   if ( millis() - lastMovementDetected > debounceMovement ) {
+    portENTER_CRITICAL_ISR(&pirMux);
     motionDetected = true;
     lastMovementDetected = millis();
-  portEXIT_CRITICAL(&pirMux); 
+    portEXIT_CRITICAL_ISR(&pirMux); 
   }
 }
 
 /**************************************************************************
- * stream_handler ~
+ * stream_handler
  **************************************************************************/
 static esp_err_t stream_handler(httpd_req_t *req) {
   camera_fb_t * fb = NULL;
@@ -199,7 +199,7 @@ static esp_err_t stream_handler(httpd_req_t *req) {
 }
 
 /**************************************************************************
- * cam_StartServer ~
+ * cam_StartServer
 ***************************************************************************/
 void cam_StartServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
@@ -221,7 +221,7 @@ void cam_StartServer() {
 }
 
 /**************************************************************************
- * cam_Setup ~
+ * cam_Setup
 ***************************************************************************/
 void cam_Setup() {
   camera_config_t config;
@@ -280,6 +280,7 @@ void setup() {
   pinMode(PIN_FLASH_LED, OUTPUT);
   pinMode(PIN_BOARD_LED, OUTPUT);
   digitalWrite(PIN_FLASH_LED, LOW);
+  digitalWrite(pin_BoardLED, HIGH);   // = off
 
   cam_Setup();
 
@@ -291,7 +292,8 @@ void setup() {
     Serial.print(".");
   }
   if ( WiFi.isConnected() ) {
-    Serial.print("\nWiFi connected.\n - RSSI: "); Serial.print(WiFi.RSSI()); Serial.print(", Local IP: "); Serial.println(WiFi.localIP() ); 
+    Serial.print("\nWiFi connected.\n - RSSI: "); Serial.println(WiFi.RSSI());
+    Serial.print(" - Local IP: "); Serial.println(WiFi.localIP() ); 
   } else {
     Serial.print("\n>>> WiFi connection failed.");
   }
@@ -363,8 +365,8 @@ void setup() {
  * - Display notification when Switch changed state
 ***************************************************************************/
 void loop() {
-  static int lastLuxReading = 0;
-  static int lastTempReading = 0;
+  static unsigned long lastLuxReading = 0;
+  static unsigned long lastTempReading = 0;
 
   // --- LIGHT reading ---
   if ( (lastLuxReading == 0) || (millis() - lastLuxReading > luxReadInterval) ) {
@@ -372,7 +374,7 @@ void loop() {
     sensors_event_t event;
     sensorLux.getEvent(&event);
     int valueLux =  event.light;
-    Serial.print (" - Illuminence: "); Serial.println( valueLux);
+    Serial.print (" - Luminosity: "); Serial.println( valueLux);
     BlinkLED(1);
     lastLuxReading = millis();
   }
@@ -386,30 +388,29 @@ void loop() {
     lastTempReading = millis();
   }
 
-  // --- PIR Motion detection ---
+  // --- PIR motion detection ---
   if (motionDetected) {
     Serial.println(" - Motion Detected");
     BlinkLED(1);
-    portENTER_CRITICAL_ISR(&pirMux);
+    portENTER_CRITICAL(&pirMux);
     motionDetected = false;
-    portEXIT_CRITICAL_ISR(&pirMux);
+    portEXIT_CRITICAL(&pirMux);
   }
 
   // --- SWITCH changes ---
   if (switchChangedState ) {
-    portENTER_CRITICAL_ISR(&switchMux);
     if ( (millis() - lastSwitchChange > debounceSwitch) ) {
       // The switch changed, and we waited long enough after the first change/bounce.
       Serial.print(" - Switch changed: "); 
       switch ( digitalRead(PIN_SWITCH) ) {
         case 0:     Serial.println("CLOSED"); break;
-        case 1:     Serial.println("OPEN"); break;
-        default :   Serial.println("UNKNOWN??");
+        case 1:     Serial.println("OPEN");
       }
       BlinkLED(1);
+      portENTER_CRITICAL(&switchMux);
       switchChangedState = false;
+      portEXIT_CRITICAL(&switchMux);
     }
-    portEXIT_CRITICAL_ISR(&switchMux);
   }
 }
 
