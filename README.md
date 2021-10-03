@@ -26,7 +26,7 @@ Type | Sensor | Function | GPIO
 I2C | [TSL2561](https://learn.adafruit.com/tsl2561) | Luminosity (Lux) | 14 (SDA)  <br>  15 (SCL)
 Wire | [DS18B20](https://datasheets.maximintegrated.com/en/ds/DS18B20.pdf) | Temperature | 2
 Binary | [AM312](https://unusualelectronics.co.uk/as312-am312-mini-pir-module-review/) | PIR | 13
-Switch |  |  |  12
+Switch | Reed | Open/Close |  12
     
 ## Issues
 Although not all that difficult, there are a couple of problems that must be kept in mind to make this work.
@@ -56,7 +56,7 @@ A struct with the same name, **_`sensor_t`_** but with a different definition ex
 
 ![Fritzing Diagram](https://github.com/JJFourie/ESP32Cam_I2C_OneWire_Switch/blob/main/Images/ESP32Cam_I2C_OneWire_Switch.jpg)
 - The white wires are only necessary when flashing the board with a new sketch, or when debugging in order to see the output of debug statements in the IDE.    
-  **Note**: *Ensure your FTDI card pins match the layout in the diagram! My (fake?) card pin layout was the opposite, an exact mirror image of the most common cards.*
+  **Note**: *Ensure your FTDI card pins match the layout in the diagram! My (fake?) card pin layout was the exact opposite, a mirror image of the most common cards.*
     
 -----
 .    
